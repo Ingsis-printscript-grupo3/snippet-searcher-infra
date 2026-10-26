@@ -1,0 +1,144 @@
+# el sistema entero de Snippet Searcher en Docker Swarm. Es el mismo que el docker-compose.yml de
+# snippet-service, pero con las imagenes publicadas en ghcr en vez de construirlas.
+#
+# Lo mismo sirve para dev y prod: lo que cambia entra por variables (ver env/). Se despliega con
+#   docker stack deploy -c docker-stack.yml snippet-searcher
+# docker stack deploy no lee el .env solo: las variables tienen que estar exportadas en la shell.
+#
+# Swarm ignora depends_on: cada servicio arranca cuando puede y, si su base todavia no esta, se cae y
+# Swarm lo vuelve a levantar (restart_policy) hasta que conecta.
+
+# lo que comparten los tres servicios propios
+x-app-deploy: &app-deploy
+  replicas: 1
+  resources:
+    limits:
+      memory: 512M
+  restart_policy:
+    condition: on-failure
+    delay: 5s
+  # rolling update: levanta el contenedor nuevo, espera a que el HEALTHCHECK de la imagen de healthy y
+  # recien ahi baja el viejo. Si el nuevo no levanta, vuelve a la version anterior
+  update_config:
+    parallelism: 1
+    order: start-first
+    failure_action: rollback
+    monitor: 30s
+  rollback_config:
+    order: start-first
+
+# las bases: un solo contenedor por volumen, nunca dos escribiendo los mismos datos
+x-db-deploy: &db-deploy
+  replicas: 1
+  resources:
+    limits:
+      memory: 256M
+  restart_policy:
+    condition: on-failure
+    delay: 5s
+  update_config:
+    order: stop-first
+
+services:
+  # el unico que se expone hacia afuera. Con nginx (consigna 5) deja de publicar el puerto
+  snippet-service:
+    image: ghcr.io/ingsis-printscript-grupo3/snippet-service:${TAG:?falta TAG}
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://snippet-db:5432/snippets
+      DB_USER: ${SNIPPET_DB_USER:?falta SNIPPET_DB_USER}
+      DB_PASSWORD: ${SNIPPET_DB_PASSWORD:?falta SNIPPET_DB_PASSWORD}
+      PRINTSCRIPT_SERVICE_URL: http://printscript-service:8080
+      PERMISSION_SERVICE_URL: http://permission-service:8081
+      ASSET_SERVICE_URL: http://asset-service:8080
+    networks:
+      - backend
+    deploy: *app-deploy
+
+  snippet-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: snippets
+      POSTGRES_USER: ${SNIPPET_DB_USER}
+      POSTGRES_PASSWORD: ${SNIPPET_DB_PASSWORD}
+    volumes:
+      - snippet-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    deploy: *db-deploy
+
+  # stateless: no tiene base
+  printscript-service:
+    image: ghcr.io/ingsis-printscript-grupo3/printscript-service:${TAG}
+    networks:
+      - backend
+    deploy: *app-deploy
+
+  permission-service:
+    image: ghcr.io/ingsis-printscript-grupo3/permission-service:${TAG}
+    environment:
+      DB_URL: jdbc:postgresql://permission-db:5432/permissions
+      DB_USER: ${PERMISSION_DB_USER:?falta PERMISSION_DB_USER}
+      DB_PASSWORD: ${PERMISSION_DB_PASSWORD:?falta PERMISSION_DB_PASSWORD}
+    networks:
+      - backend
+    deploy: *app-deploy
+
+  permission-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: permissions
+      POSTGRES_USER: ${PERMISSION_DB_USER}
+      POSTGRES_PASSWORD: ${PERMISSION_DB_PASSWORD}
+    volumes:
+      - permission-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    deploy: *db-deploy
+
+  # el bucket: el asset service de la catedra guardando en Azurite
+  asset-service:
+    image: ghcr.io/austral-ingsis/snippet-asset-service:latest
+    environment:
+      AZURE_HOST: http://azurite
+      NEW_RELIC_AGENT_ENABLED: "false"
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    hostname: azurite
+    volumes:
+      - blob-data:/data
+    networks:
+      - backend
+    deploy: *db-deploy
+
+# overlay: la red de Swarm. Los servicios se encuentran por nombre, igual que en el compose
+networks:
+  backend:
+    driver: overlay
+
+volumes:
+  snippet-data:
+  permission-data:
+  blob-data:
