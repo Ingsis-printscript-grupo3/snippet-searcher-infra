@@ -1,0 +1,13 @@
+# los .env reales tienen contraseñas: viven en cada VM. Solo se commitean los .example
+*.env
+.env
+!*.env.example
+
+# certificados HTTPS
+*.pem
+*.key
+*.crt
+
+### IntelliJ IDEA ###
+.idea
+*.iml
