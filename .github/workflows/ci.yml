@@ -1,0 +1,24 @@
+name: CI
+
+# aca no hay codigo que compilar: lo que se chequea es que el stack este bien escrito antes de que
+# llegue a una VM
+on:
+  pull_request:
+    branches: [dev, prod]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # valores de mentira: solo importa que el archivo resuelva. Si el stack pide una variable nueva
+      # y no se agrega aca, el check falla igual que fallaria el deploy
+      - name: Validate docker-stack.yml
+        env:
+          TAG: dev
+          SNIPPET_DB_USER: ci
+          SNIPPET_DB_PASSWORD: ci
+          PERMISSION_DB_USER: ci
+          PERMISSION_DB_PASSWORD: ci
+        run: docker compose -f docker-stack.yml config --quiet

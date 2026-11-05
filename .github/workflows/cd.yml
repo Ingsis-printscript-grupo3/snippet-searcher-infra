@@ -1,0 +1,32 @@
+name: CD
+
+# cada push/merge a dev o prod despliega el stack en la VM de ese ambiente
+on:
+  push:
+    branches: [dev, prod]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # el environment de GitHub se llama igual que la rama: dev y prod tienen los mismos secrets con
+    # valores distintos, asi el workflow no repite nada por ambiente
+    environment: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # entra por SSH a la VM y corre docker stack deploy contra su Swarm. resolve_image (por default
+      # always) hace que Swarm vuelva a preguntarle a ghcr por el tag: si cambio la imagen, la baja
+      - name: Deploy stack
+        uses: cssnr/stack-deploy-action@v1
+        with:
+          name: snippet-searcher
+          file: docker-stack.yml
+          host: ${{ secrets.VM_HOST }}
+          user: ${{ secrets.VM_USER }}
+          ssh_key: ${{ secrets.VM_SSH_KEY }}
+        env:
+          TAG: ${{ github.ref_name }}
+          SNIPPET_DB_USER: ${{ secrets.SNIPPET_DB_USER }}
+          SNIPPET_DB_PASSWORD: ${{ secrets.SNIPPET_DB_PASSWORD }}
+          PERMISSION_DB_USER: ${{ secrets.PERMISSION_DB_USER }}
+          PERMISSION_DB_PASSWORD: ${{ secrets.PERMISSION_DB_PASSWORD }}
