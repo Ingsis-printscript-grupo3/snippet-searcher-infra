@@ -28,5 +28,7 @@ jobs:
           TAG: ${{ github.ref_name }}
           SNIPPET_DB_USER: ${{ secrets.SNIPPET_DB_USER }}
           SNIPPET_DB_PASSWORD: ${{ secrets.SNIPPET_DB_PASSWORD }}
+          # la config de nginx se monta desde el repo clonado en la VM, en la misma ruta en dev y prod
+          INFRA_DIR: /home/azureuser/snippet-searcher-infra
           PERMISSION_DB_USER: ${{ secrets.PERMISSION_DB_USER }}
           PERMISSION_DB_PASSWORD: ${{ secrets.PERMISSION_DB_PASSWORD }}
