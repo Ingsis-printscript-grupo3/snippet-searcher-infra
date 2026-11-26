@@ -62,11 +62,9 @@ services:
         failure_action: rollback
         monitor: 30s
 
-  # el unico que se expone hacia afuera. Con nginx deja de publicar el puerto
+  # ya no publica puerto: se llega por el proxy, en /snippets
   snippet-service:
     image: ghcr.io/ingsis-printscript-grupo3/snippet-service:${TAG:?falta TAG}
-    ports:
-      - "8080:8080"
     environment:
       DB_URL: jdbc:postgresql://snippet-db:5432/snippets
       DB_USER: ${SNIPPET_DB_USER:?falta SNIPPET_DB_USER}
