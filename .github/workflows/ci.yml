@@ -1,7 +1,6 @@
 name: CI
 
-# aca no hay codigo que compilar: lo que se chequea es que el stack este bien escrito antes de que
-# llegue a una VM
+# se chequea que el stack este bien escrito antes de que llegue a una VM
 on:
   pull_request:
     branches: [dev, prod]
@@ -21,4 +20,5 @@ jobs:
           SNIPPET_DB_PASSWORD: ci
           PERMISSION_DB_USER: ci
           PERMISSION_DB_PASSWORD: ci
+          INFRA_DIR: /tmp
         run: docker compose -f docker-stack.yml config --quiet

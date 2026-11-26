@@ -1,10 +1,8 @@
-# el sistema entero de Snippet Searcher en Docker Swarm. Es el mismo que el docker-compose.yml de
-# snippet-service, pero con las imagenes publicadas en ghcr en vez de construirlas.
-#
-# Lo mismo sirve para dev y prod: lo que cambia entra por variables (ver env/). Se despliega con
-#   docker stack deploy -c docker-stack.yml snippet-searcher
-# docker stack deploy no lee el .env solo: las variables tienen que estar exportadas en la shell.
-#
+# el sistema entero de Snippet Searcher en Docker Swarm. Idem docker-compose.yml de
+# snippet-service, pero con las imagenes publicadas en ghcr
+
+# Se despliega con docker stack deploy -c docker-stack.yml snippet-searcher
+
 # Swarm ignora depends_on: cada servicio arranca cuando puede y, si su base todavia no esta, se cae y
 # Swarm lo vuelve a levantar (restart_policy) hasta que conecta.
 
@@ -40,11 +38,33 @@ x-db-deploy: &db-deploy
     order: stop-first
 
 services:
-  # el unico que se expone hacia afuera. Con nginx (consigna 5) deja de publicar el puerto
+  # la unica puerta de entrada al sistema
+  proxy:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      # el archivo de config sale del repo clonado en la VM; INFRA_DIR es su ruta absoluta
+      - ${INFRA_DIR:?falta INFRA_DIR}/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+
+  # ya no publica puerto: se llega por el proxy, en /snippets
   snippet-service:
     image: ghcr.io/ingsis-printscript-grupo3/snippet-service:${TAG:?falta TAG}
-    ports:
-      - "8080:8080"
     environment:
       DB_URL: jdbc:postgresql://snippet-db:5432/snippets
       DB_USER: ${SNIPPET_DB_USER:?falta SNIPPET_DB_USER}
