@@ -72,6 +72,8 @@ services:
       PRINTSCRIPT_SERVICE_URL: http://printscript-service:8080
       PERMISSION_SERVICE_URL: http://permission-service:8081
       ASSET_SERVICE_URL: http://asset-service:8080
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     networks:
       - backend
     deploy: *app-deploy
@@ -93,12 +95,31 @@ services:
       - backend
     deploy: *db-deploy
 
-  # stateless: no tiene base
+  # stateless: no tiene base. Redis es la cola de trabajos, no su base
   printscript-service:
     image: ghcr.io/ingsis-printscript-grupo3/printscript-service:${TAG}
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     networks:
       - backend
     deploy: *app-deploy
+
+  # la cola de trabajos (Redis Streams) entre snippet-service y printscript-service. appendonly + volumen:
+  # los pedidos pendientes sobreviven a un reinicio de Redis
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    deploy: *db-deploy
 
   permission-service:
     image: ghcr.io/ingsis-printscript-grupo3/permission-service:${TAG}
@@ -162,3 +183,4 @@ volumes:
   snippet-data:
   permission-data:
   blob-data:
+  redis-data:
