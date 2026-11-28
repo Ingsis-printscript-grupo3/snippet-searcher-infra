@@ -1,7 +1,11 @@
-# los .env reales tienen contraseñas: viven en cada VM. Solo se commitean los .example
+# los .env reales tienen contraseñas: viven en cada VM. Solo se commitean los .example.
+# .env.* ademas de *.env porque los nuestros se llaman .env.dev y .env.prod
 *.env
 .env
+.env.*
+!.env.example
 !*.env.example
+!.env.*.example
 
 # certificados HTTPS
 *.pem

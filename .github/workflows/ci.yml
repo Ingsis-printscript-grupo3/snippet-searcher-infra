@@ -21,4 +21,5 @@ jobs:
           PERMISSION_DB_USER: ci
           PERMISSION_DB_PASSWORD: ci
           INFRA_DIR: /tmp
+          DOMAIN: example.com
         run: docker compose -f docker-stack.yml config --quiet
