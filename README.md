@@ -13,6 +13,7 @@ Docker Swarm. El código de cada servicio vive en su propio repo; acá solo est�
 | asset-service (bucket) | de la cátedra | `ghcr.io/austral-ingsis/snippet-asset-service` |
 
 `snippet-service` y `permission-service` tienen cada uno su Postgres. El asset-service guarda en Azurite.
+`snippet-service` y `printscript-service` comparten un Redis: es la cola de trabajos (Redis Streams).
 
 Cada servicio publica su imagen en cada merge a `dev` o `prod` con dos tags: el nombre de la rama y el
 sha del commit.

@@ -83,6 +83,8 @@ services:
       # hacen falta los tres: snippet-service no tiene forward-headers-strategy, asi que Spring ve
       # el pedido como http y un Origin https le parece cruzado aunque venga del mismo dominio
       CORS_ALLOWED_ORIGINS: https://grupo3-snippet-dev.duckdns.org,https://grupo3-snippet-prod.duckdns.org,http://localhost:5173
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     networks:
       - backend
     deploy: *app-deploy
@@ -104,12 +106,31 @@ services:
       - backend
     deploy: *db-deploy
 
-  # stateless: no tiene base
+  # stateless: no tiene base. Redis es la cola de trabajos, no su base
   printscript-service:
     image: ghcr.io/ingsis-printscript-grupo3/printscript-service:${TAG}
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     networks:
       - backend
     deploy: *app-deploy
+
+  # la cola de trabajos (Redis Streams) entre snippet-service y printscript-service. appendonly + volumen:
+  # los pedidos pendientes sobreviven a un reinicio de Redis
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    deploy: *db-deploy
 
   permission-service:
     image: ghcr.io/ingsis-printscript-grupo3/permission-service:${TAG}
@@ -173,3 +194,4 @@ volumes:
   snippet-data:
   permission-data:
   blob-data:
+  redis-data:
