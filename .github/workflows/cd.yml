@@ -8,8 +8,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # el environment de GitHub se llama igual que la rama: dev y prod tienen los mismos secrets con
-    # valores distintos, asi el workflow no repite nada por ambiente
+    # el environment de GitHub se llama igual que la rama: dev y prod tienen los mismos secrets con valores distintos
     environment: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
