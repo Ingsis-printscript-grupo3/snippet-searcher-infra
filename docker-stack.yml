@@ -1,10 +1,8 @@
-# el sistema entero de Snippet Searcher en Docker Swarm. Es el mismo que el docker-compose.yml de
-# snippet-service, pero con las imagenes publicadas en ghcr en vez de construirlas.
-#
-# Lo mismo sirve para dev y prod: lo que cambia entra por variables (ver env/). Se despliega con
-#   docker stack deploy -c docker-stack.yml snippet-searcher
-# docker stack deploy no lee el .env solo: las variables tienen que estar exportadas en la shell.
-#
+# el sistema entero de Snippet Searcher en Docker Swarm. Idem docker-compose.yml de
+# snippet-service, pero con las imagenes publicadas en ghcr
+
+# Se despliega con docker stack deploy -c docker-stack.yml snippet-searcher
+
 # Swarm ignora depends_on: cada servicio arranca cuando puede y, si su base todavia no esta, se cae y
 # Swarm lo vuelve a levantar (restart_policy) hasta que conecta.
 
@@ -40,11 +38,41 @@ x-db-deploy: &db-deploy
     order: stop-first
 
 services:
-  # el unico que se expone hacia afuera. Con nginx (consigna 5) deja de publicar el puerto
+  # la unica puerta de entrada al sistema
+  proxy:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # el dominio del ambiente. La imagen lo reemplaza en el template al arrancar
+      DOMAIN: ${DOMAIN:?falta DOMAIN}
+    volumes:
+      # la config sale del repo clonado en la VM; INFRA_DIR es su ruta absoluta
+      - ${INFRA_DIR:?falta INFRA_DIR}/nginx/templates/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      # el archivo de validacion que deja certbot, para que nginx lo sirva
+      - ${INFRA_DIR}/certbot/www:/var/www/certbot:ro
+      # los certificados. ro: nginx los lee, no los toca
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+
+  # se llega por el proxy, en /snippets
   snippet-service:
     image: ghcr.io/ingsis-printscript-grupo3/snippet-service:${TAG:?falta TAG}
-    ports:
-      - "8080:8080"
     environment:
       DB_URL: jdbc:postgresql://snippet-db:5432/snippets
       DB_USER: ${SNIPPET_DB_USER:?falta SNIPPET_DB_USER}
@@ -52,6 +80,11 @@ services:
       PRINTSCRIPT_SERVICE_URL: http://printscript-service:8080
       PERMISSION_SERVICE_URL: http://permission-service:8081
       ASSET_SERVICE_URL: http://asset-service:8080
+      # hacen falta los tres: snippet-service no tiene forward-headers-strategy, asi que Spring ve
+      # el pedido como http y un Origin https le parece cruzado aunque venga del mismo dominio
+      CORS_ALLOWED_ORIGINS: https://grupo3-snippet-dev.duckdns.org,https://grupo3-snippet-prod.duckdns.org,http://localhost:5173
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     networks:
       - backend
     deploy: *app-deploy
@@ -73,12 +106,31 @@ services:
       - backend
     deploy: *db-deploy
 
-  # stateless: no tiene base
+  # stateless: no tiene base. Redis es la cola de trabajos, no su base
   printscript-service:
     image: ghcr.io/ingsis-printscript-grupo3/printscript-service:${TAG}
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     networks:
       - backend
     deploy: *app-deploy
+
+  # la cola de trabajos (Redis Streams) entre snippet-service y printscript-service. appendonly + volumen:
+  # los pedidos pendientes sobreviven a un reinicio de Redis
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+    deploy: *db-deploy
 
   permission-service:
     image: ghcr.io/ingsis-printscript-grupo3/permission-service:${TAG}
@@ -142,3 +194,4 @@ volumes:
   snippet-data:
   permission-data:
   blob-data:
+  redis-data:
