@@ -2,9 +2,37 @@
 # Reparte por ruta a los servicios de la red interna
 # Se monta en el contenedor nginx del docker-stack.yml.
 
+# Es un template, no un .conf: la imagen de nginx reemplaza ${DOMAIN} al arrancar y escribe el
+# resultado en /etc/nginx/conf.d/default.conf. Solo toca las variables que existen en el entorno
+# del contenedor, asi que $host, $request_uri y las nuestras quedan intactas.
+# Gracias a eso el mismo archivo sirve en dev y en prod, cada uno con su dominio y su certificado.
+
+# El 80 solo deja pasar la validacion de let's encrypt y manda todo lo demas a https
 server {
     listen 80;
-    server_name grupo3-snippet-dev.duckdns.org;
+    server_name ${DOMAIN};
+
+    # el archivo que Let's Encrypt viene a leer. Siempre por el 80, tambien al renovar
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # 301 y no 302: el navegador se lo acuerda y la prox vez va directo a https
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    # fullchain y no cert: incluye el intermedio de Let's Encrypt, que el navegador necesita
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    # las versiones viejas tienen agujeros conocidos
+    ssl_protocols TLSv1.2 TLSv1.3;
 
     # El DNS interno de Docker para traducir nombres de servicio a IP
     resolver 127.0.0.11 valid=10s ipv6=off;

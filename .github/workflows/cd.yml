@@ -8,8 +8,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # el environment de GitHub se llama igual que la rama: dev y prod tienen los mismos secrets con
-    # valores distintos, asi el workflow no repite nada por ambiente
+    # el environment de GitHub se llama igual que la rama: dev y prod tienen los mismos secrets con valores distintos
     environment: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
@@ -30,5 +29,7 @@ jobs:
           SNIPPET_DB_PASSWORD: ${{ secrets.SNIPPET_DB_PASSWORD }}
           # la config de nginx se monta desde el repo clonado en la VM, en la misma ruta en dev y prod
           INFRA_DIR: /home/azureuser/snippet-searcher-infra
+          # el dominio del ambiente: nginx lo usa en el server_name y en la ruta del certificado
+          DOMAIN: ${{ secrets.VM_HOST }}
           PERMISSION_DB_USER: ${{ secrets.PERMISSION_DB_USER }}
           PERMISSION_DB_PASSWORD: ${{ secrets.PERMISSION_DB_PASSWORD }}
